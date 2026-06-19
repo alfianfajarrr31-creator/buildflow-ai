@@ -1,0 +1,6 @@
+{
+  "name": "BuildFlow AI",
+  "description": "Construction Timelapse Prompt Generator for Kling AI, Veo, Hailuo, and Grok.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
