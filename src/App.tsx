@@ -27,7 +27,8 @@ import {
   defaultScenePlan,
   formatBuildFlowOutput,
   limitToMaxChars,
-  makeSoundPromptCompliant
+  makeSoundPromptCompliant,
+  enforceTransitionPromptCompliance
 } from './promptEngine';
 
 export default function App() {
@@ -151,7 +152,7 @@ export default function App() {
 
             return {
               ...t,
-              imageToVideoPrompt: cleanForbiddenWords(imageToVideoPrompt),
+              imageToVideoPrompt: enforceTransitionPromptCompliance(imageToVideoPrompt),
               soundEffectsPrompt: cleanForbiddenWords(soundPrompt),
             };
           }),

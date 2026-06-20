@@ -142,6 +142,27 @@ export function makeSoundPromptCompliant(text: string): string {
   return compliantSuffix;
 }
 
+export const STATIC_CAMERA_PREFIX = "Static camera fixed in one position recording a realistic construction timelapse.";
+
+export const FRAMING_LOCK_SENTENCE = "Keep the exact same wide framing, camera height, lens perspective, and building orientation from the start frame to the end frame. Do not zoom in, do not crop closer, do not switch to a close-up, do not change camera angle, and do not introduce camera movement. Do not use crossfade, ghosting, double exposure, transparent overlay effects, or blended frame artifacts.";
+
+export function enforceTransitionPromptCompliance(prompt: string): string {
+  let cleanPrompt = prompt || "";
+
+  if (!cleanPrompt.startsWith(STATIC_CAMERA_PREFIX)) {
+    cleanPrompt = `${STATIC_CAMERA_PREFIX} ${cleanPrompt}`;
+  }
+
+  if (!cleanPrompt.includes(FRAMING_LOCK_SENTENCE)) {
+    cleanPrompt = cleanPrompt.replace(
+      STATIC_CAMERA_PREFIX,
+      `${STATIC_CAMERA_PREFIX} ${FRAMING_LOCK_SENTENCE}`
+    );
+  }
+
+  return cleanForbiddenWords(cleanPrompt);
+}
+
 /**
  * 6. Default Keyframe Plan Stages for Construction
  */
@@ -353,5 +374,10 @@ export const sampleMockOutput: BuildFlowOutput = {
   facebookProCaption: "Amazing modern beach house construction timelapse from vacant sand lot to luxurious finished architecture. Watch structural framing, foundation work, custom roofing, and landscaping! Built with stable lock-ground photography. What do you think of this modern charcoal exterior? #timelapse #design #construction",
   formattedOutput: ""
 };
+
+sampleMockOutput.transitions = sampleMockOutput.transitions.map(t => ({
+  ...t,
+  imageToVideoPrompt: enforceTransitionPromptCompliance(t.imageToVideoPrompt)
+}));
 
 sampleMockOutput.formattedOutput = formatBuildFlowOutput(sampleMockOutput);

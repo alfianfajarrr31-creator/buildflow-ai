@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
-import { SYSTEM_PROMPT, generateUserPrompt, cleanForbiddenWords, defaultScenePlan, formatBuildFlowOutput, limitToMaxChars, makeSoundPromptCompliant } from "./src/promptEngine";
+import { SYSTEM_PROMPT, generateUserPrompt, cleanForbiddenWords, defaultScenePlan, formatBuildFlowOutput, limitToMaxChars, makeSoundPromptCompliant, enforceTransitionPromptCompliance } from "./src/promptEngine";
 
 async function startServer() {
   const app = express();
@@ -218,7 +218,7 @@ async function startServer() {
           startSceneNumber: idx + 1,
           endSceneNumber: idx + 2,
           title: t.title || `Transition Part ${idx + 1}`,
-          imageToVideoPrompt: cleanForbiddenWords(videoPrompt),
+          imageToVideoPrompt: enforceTransitionPromptCompliance(videoPrompt),
           soundEffectsPrompt: cleanForbiddenWords(soundPrompt)
         };
       });
