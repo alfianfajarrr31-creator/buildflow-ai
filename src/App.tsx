@@ -24,7 +24,10 @@ import {
   BuildFlowOutput, 
   sampleMockOutput, 
   cleanForbiddenWords, 
-  defaultScenePlan 
+  defaultScenePlan,
+  formatBuildFlowOutput,
+  limitToMaxChars,
+  makeSoundPromptCompliant
 } from './promptEngine';
 
 export default function App() {
@@ -96,12 +99,11 @@ export default function App() {
       '✨ Applying lighting preset and preparing copy-ready prompts...'
     ];
 
-    const stageProgressDocs = [
-      "Workers actively dig trenches, move piles of dirt, and clear the terrain with compact construction gear while boundary lines remain fixed.",
-      "Concrete mixers pour fresh mix, while workers carry rebar mesh and operate flat floats to secure a flat matte gray concrete slab under the sun.",
-      "Construction crews hoist columns, join roof trusses, and secure structural wood studs and beams to lift the rigid skeletal frame.",
-      "Workers lift exterior cladding sheets, secure horizontal boards, and window panels to fully seal the building envelope.",
-      "Professional crew spray-paints the exterior trim, installs ambient warm light fixtures, spreads lawn turf, and cleans remaining tools."
+    const transitionStages = [
+      "Workers excavation spade shovelling, site clearing with crawler backhoes, and leveling of the terrain while corner stakes remain frozen.",
+      "Concrete mixers pour wet active mix, workers laying steel rebar mesh reinforcement panels, flat floats levelling concrete ready.",
+      "Framers lift wood stud rows, nailing wall frameworks down, and hoisting primary structural roof trusses step-by-step.",
+      "Crews wrapping white moisture sheets, installing exterior cedar finish wall trim boards, locking thick glass sliding double doors."
     ];
 
     let currentStepIndex = 0;
@@ -115,40 +117,59 @@ export default function App() {
         clearInterval(stepInterval);
 
         const customOutput: BuildFlowOutput = {
-          scenes: sampleMockOutput.scenes.map((scene, index) => {
+          projectTitle: `${inputs.projectTopic || "Custom"} Construction Timelapse Blueprint`,
+          keyframes: sampleMockOutput.keyframes.map((kf, index) => {
             const userPOV = inputs.cameraPOV;
             const userEnv = inputs.environment;
             const userLight = inputs.lightingPreset;
             const cleanTopic = inputs.projectTopic || "custom beach cottage";
             const specialText = inputs.specialFeature ? `, ${inputs.specialFeature}` : "";
 
-            const startFrameDesc = `A state-of-the-art ${cleanTopic} construction site showing stage ${index + 1}: ${defaultScenePlan[index].stage}. The environment is a ${userEnv} backdropped by stationary scenery. Workers in high-vis vests and hard hats are active.`;
-            const endFrameDesc = `The progress of the ${cleanTopic} successfully concludes Stage ${index + 1}: ${defaultScenePlan[index].stage}, integrated neatly within ${userEnv}.`;
-
-            const textToImagePrompt = `An ultra-realistic documentary photo, ${userPOV} locked-off tripod view. A ${userEnv} background with ${userLight}. The lot features ${defaultScenePlan[index].focus} during the building of ${cleanTopic}${specialText}. Dedicated construction workers in neon shirts and yellow hard hats are actively working. 8k resolution, crisp architectural focus, stable perspective.`;
-
-            const imageToVideoPrompt = `Locked-off stable tripod shot, high-speed construction timelapse. Starts from the generated image. ${stageProgressDocs[index]} on the ${cleanTopic}. Material progress is carried forward sequentially step-by-step through physical labor with zero camera shake. The background environment of ${userEnv} and ambient ${userLight} remain absolutely constant.`;
-
-            const soundEffectsPrompt = `Close-up sound of construction tools, rhythmic machinery, sound of workers talking on site in the middle of a ${userEnv}, low hum of a diesel generator.`;
+            const textToImagePrompt = `An ultra-realistic documentary photo, ${userPOV} locked-off tripod view. A ${userEnv} background with ${userLight}. The lot features ${defaultScenePlan[index].focus} during the building of ${cleanTopic}${specialText}. Dedicated construction workers in neon shirts and yellow hard hats are actively working. Ultra realistic, architectural photography, construction documentary, natural daylight, sharp focus, realistic materials, highly detailed, 4K quality.`;
 
             return {
-              ...scene,
-              sceneTitle: `${scene.sceneTitle.split(' — ')[0]} — ${cleanTopic.slice(0, 32)}...`,
-              constructionStage: defaultScenePlan[index].stage,
-              startFrameDescription: cleanForbiddenWords(startFrameDesc),
-              endFrameDescription: cleanForbiddenWords(endFrameDesc),
+              ...kf,
+              title: `${kf.title.split(' — ')[0]} — ${cleanTopic.slice(0, 32)}...`,
+              description: `Precision matched progress depicting ${kf.progressPercent}% work completion on the ${cleanTopic} inside ${userEnv}.`,
               textToImagePrompt: cleanForbiddenWords(textToImagePrompt),
-              imageToVideoPrompt: cleanForbiddenWords(imageToVideoPrompt),
-              soundEffectsPrompt: cleanForbiddenWords(soundEffectsPrompt),
             };
-          }) as any,
-          aiSettings: {
-            ...sampleMockOutput.aiSettings,
-            platform: inputs.aiPlatform,
-          },
-          youtubeShortsCaption: generateSocialCaption('youtube', inputs.projectTopic || "custom beach cottage", inputs.captionLanguage),
-          facebookProCaption: generateSocialCaption('facebook', inputs.projectTopic || "custom beach cottage", inputs.captionLanguage),
+          }),
+          transitions: sampleMockOutput.transitions.map((t, index) => {
+            const userEnv = inputs.environment;
+            const userLight = inputs.lightingPreset;
+            const cleanTopic = inputs.projectTopic || "custom beach cottage";
+
+            const exactPrefix = "Static camera fixed in one position recording a realistic construction timelapse.";
+            const imageToVideoPrompt = `${exactPrefix} Starts from the generated start scene image. ${transitionStages[index]} on the ${cleanTopic}. Material progress is carried forward sequentially step-by-step through physical labor with zero camera shake. The background environment of ${userEnv} and ambient ${userLight} remain absolutely constant. Cinematic construction documentary, ultra realistic, realistic motion, natural daylight, highly detailed, 4K.`;
+
+            let soundPrompt = t.soundEffectsPrompt;
+            const exactPhrase = "Ultra realistic synchronized audio, authentic construction site soundscape.";
+            if (!soundPrompt.includes(exactPhrase)) {
+              soundPrompt = `${exactPhrase} ${soundPrompt}`;
+            }
+            soundPrompt = makeSoundPromptCompliant(soundPrompt);
+
+            return {
+              ...t,
+              imageToVideoPrompt: cleanForbiddenWords(imageToVideoPrompt),
+              soundEffectsPrompt: cleanForbiddenWords(soundPrompt),
+            };
+          }),
+          klingSettings: `Duration per Scene: 10 Seconds
+Total Keyframes: 5
+Total Video Transitions: 4
+Aspect Ratio: 9:16
+Camera Movement: Static
+Style: Realistic Construction Timelapse
+Quality: 4K
+Method: Start Frame to End Frame`,
+          youtubeShortsTitle: limitToMaxChars(`Amazing Construction Timelapse of ${inputs.projectTopic || "Custom Build"}! 🏗️`, 100),
+          youtubeShortsDescription: `Watch this modern ${inputs.projectTopic || "Custom Build"} timelapse from vacant lot to finished architecture! #timelapse #klingai #construction`,
+          facebookProCaption: `Incredible step-by-step construction transformation timelapse of ${inputs.projectTopic || "Custom Build"}. Shot with completely stable locked camera technology. What do you think of this realistic build? #construction #timelapse`,
+          formattedOutput: ""
         };
+
+        customOutput.formattedOutput = formatBuildFlowOutput(customOutput);
 
         setOutput(customOutput);
         setIsGenerating(false);
@@ -222,39 +243,7 @@ export default function App() {
     if (!output) return;
     const cleanTopic = inputs.projectTopic || "Custom_Build";
 
-    let md = `# BuildFlow AI — Construction Prompt Blueprint Package\n`;
-    md += `**Topic:** ${cleanTopic}\n`;
-    md += `**AI Video Engine:** ${output.aiSettings.platform}\n`;
-    md += `**Camera POV:** ${inputs.cameraPOV}\n`;
-    md += `**Lighting Preset:** ${inputs.lightingPreset}\n`;
-    md += `**Surrounding Environment:** ${inputs.environment}\n\n`;
-
-    md += `## ⚙️ Recommended AI Parameters & Flags\n`;
-    md += `* **Suggested Flags:** \`${output.aiSettings.suggestedParameters.join(' ')}\`\n`;
-    md += `* **Segment Duration:** 10 seconds per scene (50s continuous total)\n`;
-    md += `* **Camera Rule:** Static locked-off horizon backdrop matched tripod placement\n\n`;
-
-    output.scenes.forEach(s => {
-      md += `### Scene ${s.sceneNumber}: ${s.sceneTitle}\n`;
-      md += `* **Substage focus:** *${s.constructionStage}*\n`;
-      md += `* **🏁 Start Frame State:** ${s.startFrameDescription}\n`;
-      md += `* **🎯 Final Transition Target:** ${s.endFrameDescription}\n\n`;
-      md += `#### 1. Text-to-Image Prompt (Initial Frame Assembly)\n`;
-      md += `\`\`\`text\n${s.textToImagePrompt}\n\`\`\`\n\n`;
-      md += `#### 2. Image-to-Video direction (Sequencing / Timelapse Transition)\n`;
-      md += `\`\`\`text\n${s.imageToVideoPrompt}\n\`\`\`\n\n`;
-      md += `#### 3. Satisfying Acoustic/Foley Audio Prompts\n`;
-      md += `\`\`\`text\n${s.soundEffectsPrompt}\n\`\`\`\n\n`;
-      md += `---\n\n`;
-    });
-
-    md += `## 💬 Copy-ready Social Captions\n\n`;
-    md += `### YouTube Shorts Blueprint\n`;
-    md += `> ${output.youtubeShortsCaption}\n\n`;
-    md += `### Facebook Pro Blueprint\n`;
-    md += `> ${output.facebookProCaption}\n`;
-
-    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8;' });
+    const blob = new Blob([output.formattedOutput], { type: 'text/markdown;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
@@ -267,26 +256,7 @@ export default function App() {
   // One-click Copy of All Output contents
   const copyAllOutput = () => {
     if (!output) return;
-    const cleanTopic = inputs.projectTopic || "Custom_Build";
-
-    let text = `=== BUILDFLOW AI PROMPT BLUEPRINT PACKAGE: ${cleanTopic} ===\n\n`;
-    text += `AI Video Engine: ${output.aiSettings.platform}\n`;
-    text += `Recommended Parameters: ${output.aiSettings.suggestedParameters.join(' ')}\n\n`;
-
-    output.scenes.forEach(s => {
-      text += `--- Scene ${s.sceneNumber}: ${s.sceneTitle} (${s.constructionStage}) ---\n`;
-      text += `- Start Frame State: ${s.startFrameDescription}\n`;
-      text += `- End Frame Target: ${s.endFrameDescription}\n`;
-      text += `1. Text-to-Image Prompt:\n${s.textToImagePrompt}\n\n`;
-      text += `2. Image-to-Video direction:\n${s.imageToVideoPrompt}\n\n`;
-      text += `3. Audio SFX Prompt:\n${s.soundEffectsPrompt}\n\n`;
-    });
-
-    text += `=== SOCIAL MEDIA CAPTIONS ===\n`;
-    text += `YouTube Shorts:\n${output.youtubeShortsCaption}\n\n`;
-    text += `Facebook Pro:\n${output.facebookProCaption}\n`;
-
-    handleCopyToClipboard(text, 'copy-all');
+    handleCopyToClipboard(output.formattedOutput, 'copy-all');
   };
 
   // Generate dynamic translations based on preferences
@@ -711,19 +681,19 @@ export default function App() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="bg-white p-2.5 rounded border border-neutral-200 text-xs">
                       <div className="text-neutral-400 mb-0.5">PLATFORM</div>
-                      <div className="font-bold text-neutral-800">{output.aiSettings.platform}</div>
+                      <div className="font-bold text-neutral-800">{inputs.aiPlatform}</div>
                     </div>
                     <div className="bg-white p-2.5 rounded border border-neutral-200 text-xs">
-                      <div className="text-neutral-400 mb-0.5">SCENE SCENARIO</div>
-                      <div className="font-bold text-neutral-800">5 Distinct Stages</div>
+                      <div className="text-neutral-400 mb-0.5">TIMELAPSE SEGMENTS</div>
+                      <div className="font-bold text-neutral-800">4 Unbroken Transitions</div>
                     </div>
                     <div className="bg-white p-2.5 rounded border border-neutral-200 text-xs">
-                      <div className="text-neutral-400 mb-0.5">CAMERA ROTATION</div>
-                      <div className="font-bold text-neutral-800">Static Locked-off</div>
+                      <div className="text-neutral-400 mb-0.5">CAMERA PERSPECTIVE</div>
+                      <div className="font-bold text-neutral-800">Static Locked-off View</div>
                     </div>
                     <div className="bg-white p-2.5 rounded border border-neutral-200 text-xs">
-                      <div className="text-neutral-400 mb-0.5">SEGMENT TIME</div>
-                      <div className="font-bold text-neutral-800">{output.aiSettings.durationPerSceneSeconds}s per scene</div>
+                      <div className="text-neutral-400 mb-0.5">KEYFRAMES DEFINED</div>
+                      <div className="font-bold text-neutral-800">5 Progressive Keys</div>
                     </div>
                   </div>
 
@@ -732,11 +702,11 @@ export default function App() {
                     <div className="text-xs">
                       <span className="font-bold text-neutral-700">Recommended Flags:</span>{' '}
                       <code className="text-xs font-mono text-orange-600 bg-neutral-50 px-1 py-0.5 rounded">
-                        {output.aiSettings.suggestedParameters.join(' ')}
+                        {output.klingSettings}
                       </code>
                     </div>
                     <button
-                      onClick={() => handleCopyToClipboard(output.aiSettings.suggestedParameters.join(' '), 'flags')}
+                      onClick={() => handleCopyToClipboard(output.klingSettings, 'flags')}
                       className="text-[11px] font-bold text-neutral-600 hover:text-orange-500 transition-colors uppercase font-mono border border-neutral-200 hover:border-neutral-300 rounded px-2.5 py-1 flex items-center justify-center gap-1 shadow-sm bg-neutral-50"
                     >
                       {copiedStates['flags'] ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
@@ -770,13 +740,14 @@ export default function App() {
 
                 {/* Tab Filtering System */}
                 <div className="px-6 py-2.5 bg-neutral-50 border-b border-neutral-100 flex items-center justify-between flex-wrap gap-2">
-                  <div className="text-xs font-semibold text-neutral-500">FILTER SCOPE:</div>
-                  <div className="flex gap-1">
+                  <div className="text-xs font-semibold text-neutral-500 font-mono">FILTER SCOPE:</div>
+                  <div className="flex gap-1" id="filter-tabs">
                     {[
-                      { id: 'all', label: 'Complete Storyboards' },
-                      { id: 'image', label: 'T2I Start Frames' },
-                      { id: 'video', label: 'I2V Directives' },
-                      { id: 'audio', label: 'SFX Prompts' },
+                      { id: 'all', label: 'Complete Blueprint' },
+                      { id: 'raw', label: 'Final Copy-Paste Output' },
+                      { id: 'image', label: 'T2I Keyframes' },
+                      { id: 'video', label: 'I2V Transitions' },
+                      { id: 'audio', label: 'SFX Audio Prompts' },
                     ].map(tab => (
                       <button
                         key={tab.id}
@@ -793,136 +764,183 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Chronological 5 Scene Sequence Lists */}
-                <div className="p-6 space-y-12">
-                  {output.scenes.map((scene, idx) => (
-                    <div key={scene.sceneNumber} className="relative pl-6 border-l-2 border-orange-500 space-y-4" id={`scene-card-${scene.sceneNumber}`}>
-                      
-                      {/* Timeline Node Badge with Orange Highlight */}
-                      <div className="absolute -left-3.5 top-0 bg-orange-500 text-white text-[11px] font-mono font-black w-7 h-7 rounded-full flex items-center justify-center shadow-sm">
-                        {scene.sceneNumber}
+                {/* raw Final Copy-Paste Output */}
+                {(activeTab === 'raw') && (
+                  <div className="p-6 space-y-4">
+                    <div className="flex items-center justify-between border-b border-neutral-200 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-orange-500" />
+                        <h3 className="font-bold text-xs text-neutral-900 uppercase tracking-widest font-mono">
+                          Final Copy-Paste Output
+                        </h3>
                       </div>
-
-                      {/* Header Title Grid */}
-                      <div className="md:flex justify-between items-start gap-4">
-                        <div>
-                          <span className="text-[10px] font-bold font-mono tracking-widest text-orange-600 uppercase">
-                            STAGE PROGRESSION PART {scene.sceneNumber}
-                          </span>
-                          <h4 className="text-md font-bold text-neutral-900 mt-0.5">{scene.sceneTitle}</h4>
-                        </div>
-                        <div className="mt-1 md:mt-0">
-                          <span className="inline-block bg-neutral-100 text-neutral-600 font-mono text-[11px] border border-neutral-200 px-2 py-0.5 rounded">
-                            {scene.constructionStage}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Side-by-side transition outline description (Strictly realistic, no unrequested transformation mechanics) */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 bg-neutral-50 p-3 rounded border border-neutral-200">
-                        <div className="text-xs">
-                          <span className="font-bold text-neutral-500 block uppercase tracking-wide mb-1 text-[10px] font-mono">
-                            🏁 Start Frame State
-                          </span>
-                          <p className="text-neutral-700">{scene.startFrameDescription}</p>
-                        </div>
-                        <div className="text-xs">
-                          <span className="font-bold text-orange-600 block uppercase tracking-wide mb-1 text-[10px] font-mono">
-                            🎯 Final Transition target
-                          </span>
-                          <p className="text-neutral-700">{scene.endFrameDescription}</p>
-                        </div>
-                      </div>
-
-                      {/* Scene codeboxes based on filter state */}
-                      <div className="space-y-3">
-                        
-                        {/* 1. Text to Image CodeBox wrapper */}
-                        {(activeTab === 'all' || activeTab === 'image') && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
-                              <span className="flex items-center gap-1 text-neutral-700 font-semibold">
-                                <ImageIcon className="w-3.5 h-3.5 text-neutral-500" />
-                                1. Text-to-Image Prompt (Start Frame Generator)
-                              </span>
-                              <span className="text-[10px] font-mono text-neutral-400">INPUT TO GENERATOR</span>
-                            </div>
-                            <div className="relative group">
-                              <textarea 
-                                readOnly
-                                value={scene.textToImagePrompt}
-                                className="w-full text-xs font-mono bg-neutral-900 text-neutral-200 p-3 rounded-md border border-neutral-800 shadow-inner h-20 focus:outline-none resize-none"
-                              />
-                              <button
-                                onClick={() => handleCopyToClipboard(scene.textToImagePrompt, `t2i-${idx}`)}
-                                className="absolute right-2.5 top-2.5 bg-neutral-800 text-neutral-300 hover:text-white px-2.5 py-1.5 rounded border border-neutral-700 text-xs font-mono hover:bg-neutral-700 transition-colors flex items-center gap-1.5 shadow"
-                              >
-                                {copiedStates[`t2i-${idx}`] ? <Check className="w-3 h-3 text-emerald-400 animate-bounce" /> : <Copy className="w-3 h-3" />}
-                                <span>{getCopyLabel(`t2i-${idx}`)}</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 2. Image to Video Guide CodeBox wrapper */}
-                        {(activeTab === 'all' || activeTab === 'video') && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
-                              <span className="flex items-center gap-1 text-neutral-700 font-semibold">
-                                <Video className="w-3.5 h-3.5 text-orange-500" />
-                                2. Image-to-Video Direction (Timelapse Drive)
-                              </span>
-                              <span className="text-[10px] font-mono text-neutral-400">START TO END FRAME MOTION</span>
-                            </div>
-                            <div className="relative group">
-                              <textarea 
-                                readOnly
-                                value={scene.imageToVideoPrompt}
-                                className="w-full text-xs font-mono bg-neutral-900 text-neutral-200 p-3 rounded-md border border-neutral-800 shadow-inner h-20 focus:outline-none resize-none"
-                              />
-                              <button
-                                onClick={() => handleCopyToClipboard(scene.imageToVideoPrompt, `i2v-${idx}`)}
-                                className="absolute right-2.5 top-2.5 bg-neutral-800 text-neutral-300 hover:text-white px-2.5 py-1.5 rounded border border-neutral-700 text-xs font-mono hover:bg-neutral-700 transition-colors flex items-center gap-1.5 shadow"
-                              >
-                                {copiedStates[`i2v-${idx}`] ? <Check className="w-3 h-3 text-emerald-400 animate-bounce" /> : <Copy className="w-3 h-3" />}
-                                <span>{getCopyLabel(`i2v-${idx}`)}</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 3. Audio/SFX CodeBox wrapper */}
-                        {(activeTab === 'all' || activeTab === 'audio') && (
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
-                              <span className="flex items-center gap-1 text-neutral-700 font-semibold">
-                                <Volume2 className="w-3.5 h-3.5 text-neutral-500" />
-                                3. Satisfying Foley Audio/SFX Design
-                              </span>
-                              <span className="text-[10px] font-mono text-neutral-400">AUDIO PROMPT</span>
-                            </div>
-                            <div className="relative group">
-                              <textarea 
-                                readOnly
-                                value={scene.soundEffectsPrompt}
-                                className="w-full text-xs font-mono bg-neutral-900 text-neutral-200 p-3 rounded-md border border-neutral-800 shadow-inner h-16 focus:outline-none resize-none"
-                              />
-                              <button
-                                onClick={() => handleCopyToClipboard(scene.soundEffectsPrompt, `sfx-${idx}`)}
-                                className="absolute right-2.5 top-2.5 bg-neutral-800 text-neutral-300 hover:text-white px-2.5 py-1.5 rounded border border-neutral-700 text-xs font-mono hover:bg-neutral-700 transition-colors flex items-center gap-1.5 shadow"
-                              >
-                                {copiedStates[`sfx-${idx}`] ? <Check className="w-3 h-3 text-emerald-400 animate-bounce" /> : <Copy className="w-3 h-3" />}
-                                <span>{getCopyLabel(`sfx-${idx}`)}</span>
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                      </div>
-
+                      <button
+                        onClick={copyAllOutput}
+                        className="text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 border border-orange-600 rounded-lg px-3.5 py-2 flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                      >
+                        {copiedStates['copy-all'] ? <Check className="w-3.5 h-3.5 text-white" /> : <Copy className="w-3.5 h-3.5 text-white/95" />}
+                        <span>{copiedStates['copy-all'] ? 'All Copied!' : 'Copy Full Final Output'}</span>
+                      </button>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="relative">
+                      <textarea
+                        readOnly
+                        value={output.formattedOutput}
+                        className="w-full text-xs font-mono bg-neutral-900 text-neutral-200 p-4 rounded-lg border border-neutral-800 shadow-inner h-[500px] focus:outline-none resize-y"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 1. TEXT TO IMAGE KEYFRAMES */}
+                {(activeTab === 'all' || activeTab === 'image') && (
+                  <div className="p-6 space-y-6">
+                    <div className="flex items-center gap-2 border-b border-neutral-200 pb-3">
+                      <ImageIcon className="w-4 h-4 text-orange-500" />
+                      <h3 className="font-bold text-xs text-neutral-900 uppercase tracking-widest font-mono">
+                        ## 1. TEXT TO IMAGE KEYFRAMES
+                      </h3>
+                    </div>
+
+                    <div className="space-y-8">
+                      {output.keyframes.map((kf, idx) => (
+                        <div key={kf.sceneNumber} className="relative pl-6 border-l-2 border-orange-500 space-y-2.5" id={`keyframe-card-${kf.sceneNumber}`}>
+                          {/* Timeline Node Badge with Orange Highlight */}
+                          <div className="absolute -left-3.5 top-0 bg-orange-600 text-white text-[11px] font-mono font-black w-7 h-7 rounded-full flex items-center justify-center shadow-sm">
+                            {kf.sceneNumber}
+                          </div>
+
+                          {/* Header Title Grid */}
+                          <div className="flex justify-between items-start gap-4">
+                            <div>
+                              <span className="text-[10px] font-bold font-mono tracking-widest text-orange-600 uppercase">
+                                Scene {kf.sceneNumber} — {kf.progressPercent}% Progress
+                              </span>
+                              <h4 className="text-md font-bold text-neutral-900 mt-0.5">{kf.title}</h4>
+                            </div>
+                          </div>
+
+                          <div className="bg-neutral-50 p-3 rounded border border-neutral-200 text-xs text-neutral-700 font-sans leading-relaxed">
+                            {kf.description}
+                          </div>
+
+                          {/* Text to Image CodeBox */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-neutral-500 font-medium font-mono">
+                              <span className="text-[11px] font-semibold text-neutral-700">Text-to-Image Prompt (Keyframe Generator)</span>
+                              <span className="text-[10px] text-neutral-400">INPUT TO GENERATOR</span>
+                            </div>
+                            <div className="relative group">
+                              <textarea 
+                                readOnly
+                                value={kf.textToImagePrompt}
+                                className="w-full text-xs font-mono bg-neutral-900 text-neutral-200 p-3 rounded-md border border-neutral-800 shadow-inner h-20 focus:outline-none resize-none"
+                              />
+                              <button
+                                onClick={() => handleCopyToClipboard(kf.textToImagePrompt, `kf-${idx}`)}
+                                className="absolute right-2.5 top-2.5 bg-neutral-800 text-neutral-300 hover:text-white px-2.5 py-1.5 rounded border border-neutral-700 text-xs font-mono hover:bg-neutral-700 transition-colors flex items-center gap-1.5 shadow"
+                              >
+                                {copiedStates[`kf-${idx}`] ? <Check className="w-3 h-3 text-emerald-400 animate-bounce" /> : <Copy className="w-3 h-3" />}
+                                <span>{getCopyLabel(`kf-${idx}`)}</span>
+                              </button>
+                            </div>
+                          </div>
+
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. IMAGE TO VIDEO TRANSITIONS */}
+                {(activeTab === 'all' || activeTab === 'video' || activeTab === 'audio') && (
+                  <div className="p-6 space-y-6">
+                    <div className="flex items-center gap-2 border-b border-neutral-200 pb-3">
+                      <Video className="w-4 h-4 text-orange-500" />
+                      <h3 className="font-bold text-xs text-neutral-900 uppercase tracking-widest font-mono">
+                        ## 2. IMAGE TO VIDEO TRANSITIONS
+                      </h3>
+                    </div>
+
+                    <div className="space-y-8">
+                      {output.transitions.map((t, idx) => (
+                        <div key={t.videoNumber} className="relative pl-6 border-l-2 border-neutral-600 space-y-4" id={`transition-card-${t.videoNumber}`}>
+                          {/* Timeline Node Badge with Grey/Dark Highlight */}
+                          <div className="absolute -left-3.5 top-0 bg-neutral-700 text-white text-[11px] font-mono font-black w-7 h-7 rounded-full flex items-center justify-center shadow-sm">
+                            T{t.videoNumber}
+                          </div>
+
+                          {/* Header Title Grid */}
+                          <div className="flex justify-between items-start gap-4">
+                            <div>
+                              <span className="text-[10px] font-bold font-mono tracking-widest text-neutral-600 uppercase">
+                                Transition {t.videoNumber}: Scene {t.startSceneNumber} (Start Frame) → Scene {t.endSceneNumber} (End Frame)
+                              </span>
+                              <h4 className="text-md font-bold text-neutral-900 mt-0.5">{t.title}</h4>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* 1. Image to Video Guide CodeBox wrapper */}
+                            {(activeTab === 'all' || activeTab === 'video') && (
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
+                                  <span className="flex items-center gap-1 text-neutral-700 font-semibold font-mono text-[11px]">
+                                    <Video className="w-3.5 h-3.5 text-orange-500" />
+                                    TIMELAPSE DRIVE DIRECTION
+                                  </span>
+                                  <span className="text-[10px] font-mono text-neutral-400">IMAGE TO VIDEO</span>
+                                </div>
+                                <div className="relative group">
+                                  <textarea 
+                                    readOnly
+                                    value={t.imageToVideoPrompt}
+                                    className="w-full text-xs font-mono bg-neutral-900 text-neutral-200 p-3 rounded-md border border-neutral-800 shadow-inner h-24 focus:outline-none resize-none"
+                                  />
+                                  <button
+                                    onClick={() => handleCopyToClipboard(t.imageToVideoPrompt, `i2v-${idx}`)}
+                                    className="absolute right-2.5 top-2.5 bg-neutral-800 text-neutral-300 hover:text-white px-2.5 py-1.5 rounded border border-neutral-700 text-xs font-mono hover:bg-neutral-700 transition-colors flex items-center gap-1.5 shadow"
+                                  >
+                                    {copiedStates[`i2v-${idx}`] ? <Check className="w-3 h-3 text-emerald-400 animate-bounce" /> : <Copy className="w-3 h-3" />}
+                                    <span>{getCopyLabel(`i2v-${idx}`)}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 2. Audio/SFX CodeBox wrapper */}
+                            {(activeTab === 'all' || activeTab === 'audio') && (
+                              <div className="space-y-1">
+                                <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
+                                  <span className="flex items-center gap-1 text-neutral-700 font-semibold font-mono text-[11px]">
+                                    <Volume2 className="w-3.5 h-3.5 text-neutral-500" />
+                                    FOLEY AUDIO / SFX PROMPT
+                                  </span>
+                                  <span className="text-[10px] font-mono text-neutral-400">AUDIO ENGINE</span>
+                                </div>
+                                <div className="relative group">
+                                  <textarea 
+                                    readOnly
+                                    value={t.soundEffectsPrompt}
+                                    className="w-full text-xs font-mono bg-neutral-900 text-neutral-200 p-3 rounded-md border border-neutral-800 shadow-inner h-24 focus:outline-none resize-none"
+                                  />
+                                  <button
+                                    onClick={() => handleCopyToClipboard(t.soundEffectsPrompt, `sfx-${idx}`)}
+                                    className="absolute right-2.5 top-2.5 bg-neutral-800 text-neutral-300 hover:text-white px-2.5 py-1.5 rounded border border-neutral-700 text-xs font-mono hover:bg-neutral-700 transition-colors flex items-center gap-1.5 shadow"
+                                  >
+                                    {copiedStates[`sfx-${idx}`] ? <Check className="w-3 h-3 text-emerald-400 animate-bounce" /> : <Copy className="w-3 h-3" />}
+                                    <span>{getCopyLabel(`sfx-${idx}`)}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Social Media Copy-ready Captions Section */}
                 <div className="p-6 bg-neutral-50 space-y-6">
@@ -934,24 +952,43 @@ export default function App() {
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     
-                    {/* YouTube Shorts Box */}
+                    {/* YouTube Shorts Title */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-700 uppercase tracking-wide">
                           <Youtube className="w-4 h-4 text-red-500" />
-                          YouTube Shorts Blueprint
+                          Shorts Title
                         </span>
                         <button
-                          onClick={() => handleCopyToClipboard(output.youtubeShortsCaption, 'shorts')}
+                          onClick={() => handleCopyToClipboard(output.youtubeShortsTitle, 'shortsTitle')}
                           className="text-[11px] font-bold text-neutral-600 hover:text-orange-500 transition-all font-mono border border-neutral-200 bg-white px-2.5 py-1 rounded shadow-xs"
                         >
-                          {copiedStates['shorts'] ? 'Copied' : 'Copy Caption'}
+                          {copiedStates['shortsTitle'] ? 'Copied' : 'Copy'}
                         </button>
                       </div>
-                      <div className="bg-white p-3 rounded border border-neutral-200 text-xs text-neutral-700 h-28 overflow-y-auto whitespace-pre-line leading-relaxed font-sans">
-                        {output.youtubeShortsCaption}
+                      <div className="bg-white p-3 rounded border border-neutral-200 text-xs text-neutral-700 h-24 overflow-y-auto whitespace-pre-line leading-relaxed font-sans font-semibold">
+                        {output.youtubeShortsTitle}
+                      </div>
+                    </div>
+
+                    {/* YouTube Shorts Description */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-xs font-bold text-neutral-700 uppercase tracking-wide">
+                          <Youtube className="w-4 h-4 text-red-500" />
+                          Shorts Description
+                        </span>
+                        <button
+                          onClick={() => handleCopyToClipboard(output.youtubeShortsDescription, 'shortsDesc')}
+                          className="text-[11px] font-bold text-neutral-600 hover:text-orange-500 transition-all font-mono border border-neutral-200 bg-white px-2.5 py-1 rounded shadow-xs"
+                        >
+                          {copiedStates['shortsDesc'] ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                      <div className="bg-white p-3 rounded border border-neutral-200 text-xs text-neutral-700 h-24 overflow-y-auto whitespace-pre-line leading-relaxed font-sans">
+                        {output.youtubeShortsDescription}
                       </div>
                     </div>
 
@@ -966,10 +1003,10 @@ export default function App() {
                           onClick={() => handleCopyToClipboard(output.facebookProCaption, 'fb')}
                           className="text-[11px] font-bold text-neutral-600 hover:text-orange-500 transition-all font-mono border border-neutral-200 bg-white px-2.5 py-1 rounded shadow-xs"
                         >
-                          {copiedStates['fb'] ? 'Copied' : 'Copy Caption'}
+                          {copiedStates['fb'] ? 'Copied' : 'Copy'}
                         </button>
                       </div>
-                      <div className="bg-white p-3 rounded border border-neutral-200 text-xs text-neutral-700 h-28 overflow-y-auto whitespace-pre-line leading-relaxed font-sans">
+                      <div className="bg-white p-3 rounded border border-neutral-200 text-xs text-neutral-700 h-24 overflow-y-auto whitespace-pre-line leading-relaxed font-sans">
                         {output.facebookProCaption}
                       </div>
                     </div>

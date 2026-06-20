@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
-import { SYSTEM_PROMPT, generateUserPrompt, cleanForbiddenWords } from "./src/promptEngine";
+import { SYSTEM_PROMPT, generateUserPrompt, cleanForbiddenWords, defaultScenePlan, formatBuildFlowOutput, limitToMaxChars, makeSoundPromptCompliant } from "./src/promptEngine";
 
 async function startServer() {
   const app = express();
@@ -48,50 +48,54 @@ async function startServer() {
       const responseSchema = {
         type: Type.OBJECT,
         properties: {
-          scenes: {
+          projectTitle: { type: Type.STRING },
+          keyframes: {
             type: Type.ARRAY,
-            description: "Exactly 5 chronological sequential scenes showcasing professional real-world progressive labor steps.",
+            description: "Exactly 5 chronological keyframes representing progress: 0%, 25%, 50%, 75%, 100%.",
             items: {
               type: Type.OBJECT,
               properties: {
                 sceneNumber: { type: Type.INTEGER },
-                sceneTitle: { type: Type.STRING },
-                constructionStage: { type: Type.STRING },
-                startFrameDescription: { type: Type.STRING },
-                endFrameDescription: { type: Type.STRING },
-                textToImagePrompt: { type: Type.STRING },
+                progressPercent: { type: Type.INTEGER },
+                title: { type: Type.STRING },
+                description: { type: Type.STRING },
+                textToImagePrompt: { type: Type.STRING }
+              },
+              required: ["sceneNumber", "progressPercent", "title", "description", "textToImagePrompt"]
+            }
+          },
+          transitions: {
+            type: Type.ARRAY,
+            description: "Exactly 4 transition videos connecting keyframe N to keyframe N+1.",
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                videoNumber: { type: Type.INTEGER },
+                startSceneNumber: { type: Type.INTEGER },
+                endSceneNumber: { type: Type.INTEGER },
+                title: { type: Type.STRING },
                 imageToVideoPrompt: { type: Type.STRING },
                 soundEffectsPrompt: { type: Type.STRING }
               },
-              required: [
-                "sceneNumber",
-                "sceneTitle",
-                "constructionStage",
-                "startFrameDescription",
-                "endFrameDescription",
-                "textToImagePrompt",
-                "imageToVideoPrompt",
-                "soundEffectsPrompt"
-              ]
+              required: ["videoNumber", "startSceneNumber", "endSceneNumber", "title", "imageToVideoPrompt", "soundEffectsPrompt"]
             }
           },
-          aiSettings: {
-            type: Type.OBJECT,
-            properties: {
-              platform: { type: Type.STRING },
-              durationPerSceneSeconds: { type: Type.INTEGER },
-              cameraMovement: { type: Type.STRING },
-              suggestedParameters: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING }
-              }
-            },
-            required: ["platform", "durationPerSceneSeconds", "cameraMovement", "suggestedParameters"]
-          },
-          youtubeShortsCaption: { type: Type.STRING },
-          facebookProCaption: { type: Type.STRING }
+          klingSettings: { type: Type.STRING },
+          youtubeShortsTitle: { type: Type.STRING },
+          youtubeShortsDescription: { type: Type.STRING },
+          facebookProCaption: { type: Type.STRING },
+          formattedOutput: { type: Type.STRING }
         },
-        required: ["scenes", "aiSettings", "youtubeShortsCaption", "facebookProCaption"]
+        required: [
+          "projectTitle",
+          "keyframes",
+          "transitions",
+          "klingSettings",
+          "youtubeShortsTitle",
+          "youtubeShortsDescription",
+          "facebookProCaption",
+          "formattedOutput"
+        ]
       };
 
       // Call generative model (configurable via GEMINI_MODEL environment variable)
@@ -147,56 +151,101 @@ async function startServer() {
 
       const finalOutput = recursiveSanitize(parsedOutput);
 
-      // Force exactly 5 scenes validation with high tolerance
-      if (!finalOutput.scenes || !Array.isArray(finalOutput.scenes)) {
-        finalOutput.scenes = [];
+      // Force project title
+      if (!finalOutput.projectTitle) {
+        finalOutput.projectTitle = `${inputs.projectTopic || "Custom"} Construction Timelapse`;
       }
 
-      finalOutput.scenes = finalOutput.scenes.slice(0, 5);
-      while (finalOutput.scenes.length < 5) {
-        const missingIdx = finalOutput.scenes.length;
-        finalOutput.scenes.push({
+      // Force exactly 5 keyframes validation with high tolerance
+      if (!finalOutput.keyframes || !Array.isArray(finalOutput.keyframes)) {
+        finalOutput.keyframes = [];
+      }
+      finalOutput.keyframes = finalOutput.keyframes.slice(0, 5);
+      const progresses = [0, 25, 50, 75, 100];
+      while (finalOutput.keyframes.length < 5) {
+        const missingIdx = finalOutput.keyframes.length;
+        finalOutput.keyframes.push({
           sceneNumber: missingIdx + 1,
-          sceneTitle: `Architectural Assembly Stage ${missingIdx + 1}`,
-          constructionStage: "Succeeding progressive labor steps",
-          startFrameDescription: "Matched locked-POV tripod perspective carrying forward the construction sequentially.",
-          endFrameDescription: "Progressive work moves forward smoothly during structural assembly.",
-          textToImagePrompt: `An ultra-realistic documentary photo, ${inputs.cameraPOV || "front"} locked-off tripod view. A ${inputs.environment || "urban neighborhood"} background with ${inputs.lightingPreset || "daylight"}. Construction workers actively working.`,
-          imageToVideoPrompt: "Locked-off stable tripod shot timelapse, physical labor moves forward step-by-step with zero camera shake.",
-          soundEffectsPrompt: "Close-up construction ambient tools, workers talking, quiet environment."
+          progressPercent: progresses[missingIdx],
+          title: defaultScenePlan[missingIdx]?.stage || `Assembly Part ${missingIdx + 1}`,
+          description: `Locked perspective progress depicting ${progresses[missingIdx]}% work completion safely.`,
+          textToImagePrompt: cleanForbiddenWords(`An ultra-realistic documentary photo, ${inputs.cameraPOV || "front"} locked-off tripod view. A ${inputs.environment || "urban neighborhood"} background with ${inputs.lightingPreset || "daylight"}. The lot features ${defaultScenePlan[missingIdx]?.focus || "active building"} during construction. Dedicated construction workers in neon shirts and yellow hard hats are actively working. Ultra realistic, architectural photography, construction documentary, natural daylight, sharp focus, realistic materials, highly detailed, 4K quality.`)
         });
       }
 
-      // Ensure scene numbers are correct and fields exist
-      finalOutput.scenes = finalOutput.scenes.map((scene: any, idx: number) => ({
+      // Map and guarantee structural integrity
+      finalOutput.keyframes = finalOutput.keyframes.map((kf: any, idx: number) => ({
         sceneNumber: idx + 1,
-        sceneTitle: scene.sceneTitle || `Progress Stage ${idx + 1}`,
-        constructionStage: scene.constructionStage || `Phase ${idx + 1}`,
-        startFrameDescription: scene.startFrameDescription || "Transition starts with locked perspective.",
-        endFrameDescription: scene.endFrameDescription || "Transition completes of the progress.",
-        textToImagePrompt: scene.textToImagePrompt || `Photo of construction site with workers.`,
-        imageToVideoPrompt: scene.imageToVideoPrompt || "Timelapse sequence with stable horizon.",
-        soundEffectsPrompt: scene.soundEffectsPrompt || "Tools scrapings, metal clangs, ambient motor hum."
+        progressPercent: progresses[idx],
+        title: kf.title || defaultScenePlan[idx]?.stage || `Assembly Part ${idx + 1}`,
+        description: kf.description || `Locked perspective progress depicting ${progresses[idx]}% work completion safely.`,
+        textToImagePrompt: cleanForbiddenWords(kf.textToImagePrompt || `An ultra-realistic documentary photo, ${inputs.cameraPOV || "front"} locked-off tripod view. A ${inputs.environment || "urban neighborhood"} background with ${inputs.lightingPreset || "daylight"}. The lot features ${defaultScenePlan[idx]?.focus || "active building"} during construction. Dedicated construction workers in neon shirts and yellow hard hats are actively working. Ultra realistic, architectural photography, construction documentary, natural daylight, sharp focus, realistic materials, highly detailed, 4K quality.`)
       }));
 
-      // Ensure aiSettings structure exists
-      if (!finalOutput.aiSettings || typeof finalOutput.aiSettings !== "object") {
-        finalOutput.aiSettings = {};
+      // Force exactly 4 transitions validation with high tolerance
+      if (!finalOutput.transitions || !Array.isArray(finalOutput.transitions)) {
+        finalOutput.transitions = [];
       }
-      finalOutput.aiSettings.platform = inputs.aiPlatform || "Kling AI / Veo 3";
-      finalOutput.aiSettings.durationPerSceneSeconds = 10;
-      finalOutput.aiSettings.cameraMovement = `Static locked-off camera view (POV: ${inputs.cameraPOV || "Front view"})`;
-      if (!Array.isArray(finalOutput.aiSettings.suggestedParameters)) {
-        finalOutput.aiSettings.suggestedParameters = ["--motion 7", "--cfg 5", "--camera-lock"];
+      finalOutput.transitions = finalOutput.transitions.slice(0, 4);
+      while (finalOutput.transitions.length < 4) {
+        const missingIdx = finalOutput.transitions.length;
+        finalOutput.transitions.push({
+          videoNumber: missingIdx + 1,
+          startSceneNumber: missingIdx + 1,
+          endSceneNumber: missingIdx + 2,
+          title: `Transition Part ${missingIdx + 1}`,
+          imageToVideoPrompt: "Static camera fixed in one position recording a realistic construction timelapse. Active workers carry forward sequential physical labor.",
+          soundEffectsPrompt: "Ultra realistic synchronized audio, authentic construction site soundscape. Close-up construction ambient tools, workers talking, quiet environment. No music."
+        });
       }
 
+      finalOutput.transitions = finalOutput.transitions.map((t: any, idx: number) => {
+        let videoPrompt = t.imageToVideoPrompt || "Static camera fixed in one position recording a realistic construction timelapse. Motion timelapse transitions from start scene frame to end scene frame beautifully.";
+        const exactPrefix = "Static camera fixed in one position recording a realistic construction timelapse.";
+        if (!videoPrompt.startsWith(exactPrefix)) {
+          videoPrompt = `${exactPrefix} ${videoPrompt}`;
+        }
+        
+        let soundPrompt = t.soundEffectsPrompt || "Ultra realistic synchronized audio, authentic construction site soundscape. Ambient construction site tools, foley sound.";
+        const exactPhrase = "Ultra realistic synchronized audio, authentic construction site soundscape.";
+        if (!soundPrompt.includes(exactPhrase)) {
+          soundPrompt = `${exactPhrase} ${soundPrompt}`;
+        }
+        soundPrompt = makeSoundPromptCompliant(soundPrompt);
+
+        return {
+          videoNumber: idx + 1,
+          startSceneNumber: idx + 1,
+          endSceneNumber: idx + 2,
+          title: t.title || `Transition Part ${idx + 1}`,
+          imageToVideoPrompt: cleanForbiddenWords(videoPrompt),
+          soundEffectsPrompt: cleanForbiddenWords(soundPrompt)
+        };
+      });
+
+      // Ensure Kling/AI settings exist & use exact rigid format
+      finalOutput.klingSettings = `Duration per Scene: 10 Seconds
+Total Keyframes: 5
+Total Video Transitions: 4
+Aspect Ratio: 9:16
+Camera Movement: Static
+Style: Realistic Construction Timelapse
+Quality: 4K
+Method: Start Frame to End Frame`;
+
       // Ensure default social captions exist
-      if (!finalOutput.youtubeShortsCaption) {
-        finalOutput.youtubeShortsCaption = `Building ${inputs.projectTopic || "modern build"} timelapse! Watch workers assemble this structure stage-by-stage. #construction #timelapse #building #engineering`;
+      const defaultTitle = `Satisfying Construction Timelapse of ${inputs.projectTopic || "Custom Build"}! 🏗️`;
+      finalOutput.youtubeShortsTitle = limitToMaxChars(finalOutput.youtubeShortsTitle || defaultTitle, 100);
+
+      if (!finalOutput.youtubeShortsDescription) {
+        finalOutput.youtubeShortsDescription = `Watch this amazing step-by-step construction transformation of ${inputs.projectTopic || "Custom Build"} in a realistic locked-camera timelapse! #timelapse #klingai #construction`;
       }
       if (!finalOutput.facebookProCaption) {
-        finalOutput.facebookProCaption = `Exciting new construction project update: ${inputs.projectTopic || "modern build"} builds step-by-step with zero drone movement. Full timelapse prompt blueprints generated.`;
+        finalOutput.facebookProCaption = `Exciting new construction project update: ${inputs.projectTopic || "modern build"} builds step-by-step with zero camera movement. Full timelapse prompt blueprints generated. What do you think of this realistic build? #construction #timelapse`;
       }
+
+      // Overwrite/repair formattedOutput with precision-built template
+      finalOutput.formattedOutput = formatBuildFlowOutput(finalOutput);
 
       res.json(finalOutput);
     } catch (err: any) {
