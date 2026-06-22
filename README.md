@@ -8,15 +8,21 @@ The prompt engine is structurally optimized to maintain identical background ele
 
 ## 🚀 Key Deployment Architecture
 
-> [!WARNING]
-> **Important Deployment Type:** BuildFlow AI operates as a **full-stack Express + Node.js application** hosting a Vite React frontend. It **cannot** be deployed as a static-only Single Page Application (e.g. traditional static Vercel/Netlify hosting) because it requires the secure server-side API endpoint `/api/generate` to hide the secret Gemini API Key from the browser.
+BuildFlow AI is a high-performance full-stack application. It can be deployed across container architectures, server environments, and natively on serverless platforms:
 
-### Recommended Production Runtimes
-For zero-configuration production deployment, we recommend platforms supporting container execution or Node runtimes:
-- **Google Cloud Run** (Highly Recommended — native container deployment matched with our infrastructure)
-- **Railway**
-- **Render**
-- **Heroku**
+### ⚡ 1. Serverless Deployment via Vercel (Recommended)
+BuildFlow AI is fully compatible with **Vercel Serverless Functions**. All endpoints are declared under the `/api` directory using edge-ready Node.js APIs to prevent any 404 router issues:
+- **Set Environment Variables on Vercel Dashboard:**
+  - `GEMINI_API_KEY`: *(Required for live generation)*
+  - `GEMINI_MODEL`: `gemini-2.5-flash` or `gemini-1.5-pro`
+- **Verification Links on Vercel:**
+  - Health check: `https://your-domain.vercel.app/api/health` (returns `{ "ok": true, "service": "BuildFlow AI", "mode": "vercel-function" }`)
+  - Live AI packaging: `https://your-domain.vercel.app/api/generate` (handles POST requests safely)
+
+### 🐋 2. Standard Container or Dedicated Server
+For standard runtime servers that maintain a single Node process (e.g., Google Cloud Run, Railway, Render, Heroku):
+- Set environment variables as required.
+- Standard ports bind dynamically. No heavy setup needed.
 
 ---
 
